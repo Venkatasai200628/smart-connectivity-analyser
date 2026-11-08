@@ -238,3 +238,110 @@ def test_all_range_returns_complete_history(client):
     assert response.status_code == 200
     assert len(response.json()) == 1
     assert response.json()[0]["connectivity_score"] == 85
+@pytest.mark.parametrize(
+    "range_value, outside_window, inside_window",
+    [
+        ("1h", timedelta(hours=2), timedelta(minutes=30)),
+        ("24h", timedelta(hours=30), timedelta(hours=12)),
+        ("7d", timedelta(days=8), timedelta(days=3)),
+    ],
+)
+def test_history_time_ranges_filter_correctly(
+    client,
+    range_value,
+    outside_window,
+    inside_window,
+):
+    now = datetime.now().replace(microsecond=0)
+
+    older_timestamp = (
+        now - outside_window
+    ).isoformat()
+
+    recent_timestamp = (
+        now - inside_window
+    ).isoformat()
+
+    save_history_record(
+        client,
+        older_timestamp,
+        40,
+    )
+
+    save_history_record(
+        client,
+        recent_timestamp,
+        80,
+    )
+
+    response = client.get(
+        "/api/network-history",
+        params={"range": range_value},
+    )
+
+    assert response.status_code == 200
+
+    results = response.json()
+
+    assert len(results) == 1
+    assert results[0]["connectivity_score"] == 80
+
+
+def test_recent_range_preserves_existing_behavior(client):
+    now = datetime.now().replace(microsecond=0)
+
+    save_history_record(
+        client,
+        (now - timedelta(hours=30)).isoformat(),
+        40,
+    )
+
+    save_history_record(
+        client,
+        (now - timedelta(hours=2)).isoformat(),
+        80,
+    )
+
+    response = client.get(
+        "/api/network-history",
+        params={"range": "recent"},
+    )
+
+    assert response.status_code == 200
+
+    results = response.json()
+
+    assert len(results) == 1
+    assert results[0]["connectivity_score"] == 80
+
+
+def test_all_range_includes_recent_and_old_history(client):
+    now = datetime.now().replace(microsecond=0)
+
+    save_history_record(
+        client,
+        "2020-01-01T10:00:00",
+        40,
+    )
+
+    save_history_record(
+        client,
+        now.isoformat(),
+        80,
+    )
+
+    response = client.get(
+        "/api/network-history",
+        params={"range": "all"},
+    )
+
+    assert response.status_code == 200
+
+    results = response.json()
+
+    assert len(results) == 2
+
+    assert [
+        record["connectivity_score"]
+        for record in results
+    ] == [40, 80]

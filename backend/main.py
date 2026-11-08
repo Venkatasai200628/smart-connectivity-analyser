@@ -1246,27 +1246,30 @@ def get_network_history(
         # whenever a custom date range is not supplied.
         if start_date is None and end_date is None:
 
-            if range == "all":
-                pass
+            if range != "all":
 
-            else:
-                if range == "hourly":
-                    since = datetime.now() - timedelta(hours=24)
+                    range_windows = {
+                        "1h": timedelta(hours=1),
+                        "24h": timedelta(hours=24),
+                        "7d": timedelta(days=7),
+                        "recent": timedelta(days=1),
 
-                elif range == "daily":
-                    since = datetime.now() - timedelta(days=7)
+                        # Preserve existing API range values for compatibility.
+                        "hourly": timedelta(hours=24),
+                        "daily": timedelta(days=7),
+                        "weekly": timedelta(days=30),
+                        "monthly": timedelta(days=365),
+                    }
 
-                elif range == "weekly":
-                    since = datetime.now() - timedelta(days=30)
+                    duration = range_windows.get(
+                        range,
+                        timedelta(days=1),
+                    )
 
-                elif range == "monthly":
-                    since = datetime.now() - timedelta(days=365)
+                    since = datetime.now() - duration
 
-                else:
-                    since = datetime.now() - timedelta(days=1)
-
-                conditions.append("timestamp >= ?")
-                parameters.append(since.isoformat())
+                    conditions.append("timestamp >= ?")
+                    parameters.append(since.isoformat())
 
         else:
             if start_date is not None:
